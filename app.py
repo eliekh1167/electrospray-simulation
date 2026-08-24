@@ -31,6 +31,7 @@ colors = [propellants[n]['color'] for n in names]
 fig, ax = plt.subplots()
 ax.bar(names, volts, color=colors)
 ax.set_ylabel("Onset voltage (kV)")
+ax.set_ylim(0, 6)   # fixed range in kV, pick a max that covers your whole slider sweep
 st.pyplot(fig)
 
 st.write("Data source: Garoz et al., J. Appl. Phys. 102, 064913 (2007)")
