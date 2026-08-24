@@ -1,614 +1,530 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-
-from physics import (
-    EPS0,
-    PROPPELLANTS,
-    onset_voltage,
-    stopping_potential_dimer,
-    stopping_potential_trimer_once,
-    stopping_potential_trimer_twice,
-)
-
-from rpa import simulate_rpa, normalize_curve
-from inference import fit_rpa_curve
-
+import plotly.graph_objects as go
+from scipy.constants import epsilon_0, elementary_charge
 
 st.set_page_config(
-    page_title="FALAK Electrospray Model",
-    page_icon="🚀",
+    page_title="Electrospray Model",
     layout="wide",
 )
 
-st.title("FALAK Electrospray Emission & RPA Model")
-
 st.markdown(
     """
-    **Taylor-cone onset → cluster emission → fragmentation → stopping potential → RPA**
+    <style>
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+    }
 
-    This is a reduced-order electrospray model based on the published
-    electrospray/RPA methodology. It does **not** perform molecular dynamics.
-    """
+    .falak-title {
+        text-align: center;
+        font-size: 42px;
+        font-weight: 700;
+        letter-spacing: 2px;
+    }
+
+    .falak-subtitle {
+        text-align: center;
+        color: #7fa8c9;
+        font-size: 16px;
+        margin-bottom: 30px;
+    }
+
+    .metric-card {
+        padding: 20px;
+        border-radius: 12px;
+        border: 1px solid #26324a;
+        background: #0d1424;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    '<div class="falak-title">FALAK Electrospray Model</div>',
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    '<div class="falak-subtitle">'
+    'Multiscale electrospray simulation and analysis'
+    '</div>',
+    unsafe_allow_html=True,
 )
 
 st.divider()
-
 
 # ============================================================
 # SIDEBAR
 # ============================================================
 
-st.sidebar.header("Emitter")
+st.sidebar.title("Simulation Controls")
 
-propellant_name = st.sidebar.selectbox(
-    "Propellant",
-    list(PROPPELLANTS.keys())
-)
-
-tip_radius_um = st.sidebar.slider(
-    "Emitter tip radius (µm)",
-    min_value=2.0,
-    max_value=30.0,
-    value=10.0,
-    step=0.5,
-)
-
-gap_mm = st.sidebar.slider(
-    "Electrode gap (mm)",
-    min_value=0.5,
-    max_value=5.0,
-    value=2.0,
-    step=0.1,
-)
-
-tip_radius = tip_radius_um * 1e-6
-gap = gap_mm * 1e-3
-
-props = PROPPELLANTS[propellant_name]
-
-V_onset = onset_voltage(
-    props["surface_tension"],
-    tip_radius,
-    gap,
-)
-
-st.sidebar.metric(
-    "Predicted onset voltage",
-    f"{V_onset / 1000:.3f} kV",
-)
-
-
-# ============================================================
-# TABS
-# ============================================================
-
-tab_onset, tab_rpa, tab_inference, tab_about = st.tabs(
+model = st.sidebar.selectbox(
+    "Model",
     [
-        "Onset Model",
-        "RPA Simulation",
-        "RPA Inference",
-        "Model Documentation",
-    ]
+        "Taylor Cone Onset",
+        "Molecular System",
+        "Electric Field",
+        "RPA Analysis",
+    ],
 )
 
+st.sidebar.markdown("---")
+
+st.sidebar.caption(
+    "Current validated research target:"
+)
+
+st.sidebar.info(
+    "EMIM-BF₄\n\n"
+    "Initial force-field basis: OPLS-2009IL / "
+    "0.8-scaled OPLS-2009IL."
+)
 
 # ============================================================
-# ONSET MODEL
+# PROPELLANT
 # ============================================================
 
-with tab_onset:
+propellant = "EMIM-BF4"
 
-    st.header("Taylor-cone onset")
+gamma = 0.0452  # N/m
+conductivity = 1.4  # S/m
 
-    st.write(
-        "The onset model estimates the voltage at which the applied "
-        "electrostatic stress reaches the surface-tension scale used "
-        "by the original FALAK model."
+# ============================================================
+# TAYLOR-CONE MODEL
+# ============================================================
+
+
+def onset_voltage(gamma, r_c, d):
+    """
+    Reduced-order Taylor-cone onset relation used
+    by the original FALAK prototype.
+
+    This is an onset model only.
+
+    It is NOT the molecular-dynamics model.
+    """
+
+    theta = np.radians(49.3)
+
+    return (
+        np.sqrt(
+            (r_c * gamma * np.cos(theta))
+            / (2 * epsilon_0)
+        )
+        * np.log(4 * d / r_c)
     )
+
+
+if model == "Taylor Cone Onset":
+
+    st.header("Taylor Cone Onset")
 
     col1, col2, col3 = st.columns(3)
 
-    col1.metric(
-        "Surface tension",
-        f"{props['surface_tension']:.5f} N/m",
-    )
+    with col1:
+        radius_um = st.slider(
+            "Emitter tip radius (μm)",
+            2.0,
+            30.0,
+            10.0,
+        )
 
-    col2.metric(
-        "Tip radius",
-        f"{tip_radius_um:.1f} µm",
-    )
+    with col2:
+        gap_mm = st.slider(
+            "Emitter–extractor gap (mm)",
+            0.5,
+            5.0,
+            2.0,
+        )
 
-    col3.metric(
-        "Electrode gap",
-        f"{gap_mm:.2f} mm",
+    with col3:
+        st.metric(
+            "Propellant",
+            propellant,
+        )
+
+    radius_m = radius_um * 1e-6
+    gap_m = gap_mm * 1e-3
+
+    voltage = onset_voltage(
+        gamma,
+        radius_m,
+        gap_m,
     )
 
     st.metric(
         "Predicted onset voltage",
-        f"{V_onset / 1000:.3f} kV",
+        f"{voltage / 1000:.3f} kV",
     )
-
-    st.subheader("Propellant comparison")
-
-    propellant_names = list(PROPPELLANTS.keys())
-
-    onset_values = []
-
-    for name in propellant_names:
-
-        p = PROPPELLANTS[name]
-
-        value = onset_voltage(
-            p["surface_tension"],
-            tip_radius,
-            gap,
-        )
-
-        onset_values.append(value / 1000)
-
-    fig, ax = plt.subplots(figsize=(9, 4))
-
-    ax.bar(
-        propellant_names,
-        onset_values,
-    )
-
-    ax.set_ylabel("Onset voltage (kV)")
-    ax.set_title("Predicted electrospray onset")
-
-    ax.grid(
-        axis="y",
-        alpha=0.25,
-    )
-
-    st.pyplot(fig)
-
-    st.subheader("Tip-radius sensitivity")
 
     radii = np.logspace(
-        np.log10(2e-6),
-        np.log10(30e-6),
+        np.log10(2),
+        np.log10(30),
         300,
     )
 
-    fig, ax = plt.subplots(figsize=(9, 4))
+    voltages = [
+        onset_voltage(
+            gamma,
+            r * 1e-6,
+            gap_m,
+        ) / 1000
+        for r in radii
+    ]
 
-    for name in propellant_names:
+    fig = go.Figure()
 
-        p = PROPPELLANTS[name]
+    fig.add_trace(
+        go.Scatter(
+            x=radii,
+            y=voltages,
+            mode="lines",
+            name="EMIM-BF4",
+        )
+    )
 
-        values = [
-            onset_voltage(
-                p["surface_tension"],
-                radius,
-                gap,
-            ) / 1000
-            for radius in radii
-        ]
+    fig.update_layout(
+        title="Onset Voltage vs Emitter Tip Radius",
+        xaxis_title="Tip radius (μm)",
+        yaxis_title="Onset voltage (kV)",
+        template="plotly_dark",
+        height=550,
+    )
 
-        ax.plot(
-            radii * 1e6,
-            values,
-            label=name,
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+    )
+
+    st.warning(
+        "This is the reduced-order onset model. "
+        "It is not yet coupled to molecular dynamics."
+    )
+
+# ============================================================
+# MOLECULAR SYSTEM
+# ============================================================
+
+elif model == "Molecular System":
+
+    st.header("EMIM-BF₄ Molecular System")
+
+    st.write(
+        "This view represents the atomistic system used "
+        "by the molecular-dynamics layer."
+    )
+
+    st.info(
+        "The molecular coordinates shown here must eventually "
+        "come from the validated EMIM-BF₄ topology/trajectory. "
+        "No synthetic trajectory is being presented as experimental data."
+    )
+
+    # Simple structural schematic.
+    # These coordinates are only a visualization placeholder,
+    # NOT a molecular-dynamics result.
+
+    atoms = pd.DataFrame(
+        {
+            "element": [
+                "N",
+                "C",
+                "C",
+                "C",
+                "B",
+                "F",
+                "F",
+                "F",
+                "F",
+            ],
+            "x": [
+                -1.0,
+                0.0,
+                1.0,
+                0.0,
+                3.0,
+                4.2,
+                3.0,
+                3.0,
+                1.8,
+            ],
+            "y": [
+                0.0,
+                0.8,
+                0.0,
+                -0.8,
+                0.0,
+                0.0,
+                1.2,
+                -1.2,
+                0.0,
+            ],
+            "z": [
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.0,
+                0.8,
+                0.0,
+                0.0,
+                -0.8,
+            ],
+        }
+    )
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Scatter3d(
+            x=atoms["x"],
+            y=atoms["y"],
+            z=atoms["z"],
+            mode="markers+text",
+            text=atoms["element"],
+            textposition="top center",
+            marker=dict(
+                size=9,
+            ),
+        )
+    )
+
+    fig.update_layout(
+        title="Atomistic EMIM-BF₄ Structure",
+        template="plotly_dark",
+        height=650,
+        scene=dict(
+            xaxis_title="x",
+            yaxis_title="y",
+            zaxis_title="z",
+        ),
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+    )
+
+    st.caption(
+        "Visualization scaffold only. Replace with coordinates "
+        "from the validated force-field topology/trajectory."
+    )
+
+# ============================================================
+# ELECTRIC FIELD
+# ============================================================
+
+elif model == "Electric Field":
+
+    st.header("Electrospray Electric Field")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        voltage_kv = st.slider(
+            "Extractor voltage (kV)",
+            0.1,
+            10.0,
+            2.0,
         )
 
-    ax.set_xlabel("Tip radius (µm)")
-    ax.set_ylabel("Onset voltage (kV)")
-    ax.set_title("Onset voltage vs emitter radius")
+    with col2:
 
-    ax.legend()
-    ax.grid(alpha=0.25)
+        gap_mm = st.slider(
+            "Emitter–extractor gap (mm)",
+            0.5,
+            10.0,
+            2.0,
+        )
 
-    st.pyplot(fig)
+    gap_m = gap_mm * 1e-3
 
+    E = voltage_kv * 1000 / gap_m
+
+    st.metric(
+        "Uniform-field estimate",
+        f"{E / 1e6:.3f} MV/m",
+    )
+
+    x = np.linspace(
+        -2,
+        2,
+        20,
+    )
+
+    y = np.linspace(
+        -2,
+        2,
+        20,
+    )
+
+    X, Y = np.meshgrid(x, y)
+
+    U = np.zeros_like(X)
+    V = np.ones_like(Y)
+
+    fig = go.Figure()
+
+    fig.add_trace(
+        go.Heatmap(
+            x=x,
+            y=y,
+            z=V,
+            colorbar=dict(
+                title="Relative E",
+            ),
+        )
+    )
+
+    fig.add_trace(
+        go.Streamline(
+            x=x,
+            y=y,
+            z=V,
+        )
+        if False
+        else go.Scatter(
+            x=X.flatten(),
+            y=Y.flatten(),
+            mode="markers",
+            marker=dict(
+                size=2,
+                opacity=0.35,
+            ),
+            name="Field samples",
+        )
+    )
+
+    fig.update_layout(
+        title="Electric-Field Visualization",
+        template="plotly_dark",
+        height=600,
+        xaxis_title="x",
+        yaxis_title="y",
+    )
+
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+    )
+
+    st.caption(
+        "The current field view is a visualization of the "
+        "uniform-field estimate. The production model will "
+        "replace this with the actual electrode geometry and "
+        "electrostatic solution."
+    )
 
 # ============================================================
 # RPA
 # ============================================================
 
-with tab_rpa:
+elif model == "RPA Analysis":
 
     st.header("Retarding Potential Analysis")
 
-    st.warning(
-        "The RPA model is only activated for EMI-BF4 because the "
-        "cluster/fragmentation model implemented here is tied to "
-        "the published EMI-BF4 study. Do not transfer these "
-        "fragmentation parameters to other ionic liquids without data."
+    st.write(
+        "Upload an experimental or simulated RPA dataset."
     )
 
-    if propellant_name != "EMI-BF4":
+    uploaded = st.file_uploader(
+        "RPA CSV",
+        type=["csv"],
+    )
 
-        st.error(
-            "Select EMI-BF4 to run the paper-linked cluster/RPA model."
+    if uploaded is None:
+
+        st.info(
+            "Expected columns:\n\n"
+            "`stopping_potential_V,current_A`\n\n"
+            "or\n\n"
+            "`stopping_potential_V,normalized_current`"
         )
 
     else:
 
-        operating_voltage_kv = st.slider(
-            "Operating voltage (kV)",
-            min_value=V_onset / 1000,
-            max_value=5.0,
-            value=max(1.5, V_onset / 1000),
-            step=0.05,
+        data = pd.read_csv(uploaded)
+
+        st.subheader("Dataset")
+
+        st.dataframe(
+            data,
+            use_container_width=True,
         )
 
-        operating_voltage = operating_voltage_kv * 1000
+        required_voltage = "stopping_potential_V"
 
-        st.subheader("Initial beam composition")
-
-        c1, c2, c3 = st.columns(3)
-
-        monomer = c1.slider(
-            "Monomer (%)",
-            0,
-            100,
-            45,
-        )
-
-        dimer = c2.slider(
-            "Dimer (%)",
-            0,
-            100,
-            35,
-        )
-
-        trimer = c3.slider(
-            "Trimer (%)",
-            0,
-            100,
-            20,
-        )
-
-        total = monomer + dimer + trimer
-
-        if total == 0:
+        if required_voltage not in data.columns:
 
             st.error(
-                "At least one species must have a non-zero fraction."
+                "The CSV must contain "
+                "`stopping_potential_V`."
             )
 
         else:
 
-            fractions = np.array(
-                [
-                    monomer,
-                    dimer,
-                    trimer,
-                ],
-                dtype=float,
-            )
+            current_column = None
 
-            fractions /= fractions.sum()
+            for candidate in [
+                "current_A",
+                "normalized_current",
+                "current",
+            ]:
+                if candidate in data.columns:
+                    current_column = candidate
+                    break
 
-            st.write(
-                f"Normalized beam composition: "
-                f"{fractions[0]*100:.1f}% monomer, "
-                f"{fractions[1]*100:.1f}% dimer, "
-                f"{fractions[2]*100:.1f}% trimer."
-            )
+            if current_column is None:
 
-            st.subheader("RPA parameters")
-
-            particle_count = st.slider(
-                "Monte-Carlo particles",
-                1000,
-                50000,
-                10000,
-                1000,
-            )
-
-            bins = st.slider(
-                "RPA bins",
-                50,
-                300,
-                150,
-                10,
-            )
-
-            seed = st.number_input(
-                "Random seed",
-                min_value=0,
-                max_value=999999,
-                value=42,
-            )
-
-            if st.button(
-                "Run RPA simulation",
-                type="primary",
-            ):
-
-                with st.spinner(
-                    "Running RPA Monte-Carlo simulation..."
-                ):
-
-                    stopping_potentials, species = simulate_rpa(
-                        operating_voltage=operating_voltage,
-                        fractions=fractions,
-                        particle_count=particle_count,
-                        seed=int(seed),
-                    )
-
-                curve, edges = normalize_curve(
-                    stopping_potentials,
-                    operating_voltage,
-                    bins,
-                )
-
-                centers = (
-                    edges[:-1] +
-                    edges[1:]
-                ) / 2
-
-                st.subheader(
-                    "Simulated RPA curve"
-                )
-
-                fig, ax = plt.subplots(
-                    figsize=(10, 5)
-                )
-
-                ax.plot(
-                    centers / 1000,
-                    curve,
-                    linewidth=2,
-                )
-
-                ax.set_xlabel(
-                    "Retarding potential (kV)"
-                )
-
-                ax.set_ylabel(
-                    "Normalized current"
-                )
-
-                ax.set_title(
-                    "Simulated Retarding Potential Analysis"
-                )
-
-                ax.grid(alpha=0.25)
-
-                st.pyplot(fig)
-
-                st.subheader(
-                    "Detected species distribution"
-                )
-
-                species_counts = (
-                    pd.Series(species)
-                    .value_counts()
-                    .reindex(
-                        [
-                            "monomer",
-                            "dimer",
-                            "trimer",
-                        ],
-                        fill_value=0,
-                    )
-                )
-
-                species_percent = (
-                    species_counts /
-                    species_counts.sum()
-                    * 100
-                )
-
-                result = pd.DataFrame(
-                    {
-                        "Species": species_percent.index,
-                        "Fraction (%)": species_percent.values,
-                    }
-                )
-
-                st.dataframe(
-                    result,
-                    use_container_width=True,
-                )
-
-
-# ============================================================
-# INFERENCE
-# ============================================================
-
-with tab_inference:
-
-    st.header(
-        "Infer emission characteristics from experimental RPA"
-    )
-
-    st.write(
-        """
-        Upload an experimental RPA curve as CSV.
-
-        Required columns:
-
-        `stopping_potential_V`
-
-        `normalized_current`
-        """
-    )
-
-    uploaded_file = st.file_uploader(
-        "Experimental RPA CSV",
-        type=["csv"],
-    )
-
-    if uploaded_file is not None:
-
-        data = pd.read_csv(
-            uploaded_file
-        )
-
-        required_columns = {
-            "stopping_potential_V",
-            "normalized_current",
-        }
-
-        if not required_columns.issubset(
-            data.columns
-        ):
-
-            st.error(
-                "CSV must contain the columns: "
-                "stopping_potential_V and normalized_current"
-            )
-
-        else:
-
-            st.dataframe(
-                data.head(),
-                use_container_width=True,
-            )
-
-            if propellant_name != "EMI-BF4":
-
-                st.warning(
-                    "Inference is currently restricted to EMI-BF4."
+                st.error(
+                    "Could not find a current column. "
+                    "Use `current_A` or "
+                    "`normalized_current`."
                 )
 
             else:
 
-                particle_count = st.slider(
-                    "Particles per candidate",
-                    500,
-                    10000,
-                    2000,
-                    500,
+                fig = go.Figure()
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=data[required_voltage],
+                        y=data[current_column],
+                        mode="lines+markers",
+                        name="RPA data",
+                    )
                 )
 
-                candidates = st.slider(
-                    "Candidate models",
-                    10,
-                    500,
-                    50,
-                    10,
+                fig.update_layout(
+                    title="Retarding Potential Analysis",
+                    xaxis_title="Retarding potential (V)",
+                    yaxis_title=current_column,
+                    template="plotly_dark",
+                    height=550,
                 )
 
-                if st.button(
-                    "Fit model to experimental RPA",
-                    type="primary",
-                ):
+                st.plotly_chart(
+                    fig,
+                    use_container_width=True,
+                )
 
-                    with st.spinner(
-                        "Searching candidate emission distributions..."
-                    ):
-
-                        result = fit_rpa_curve(
-                            experimental_voltage=data[
-                                "stopping_potential_V"
-                            ].to_numpy(),
-
-                            experimental_current=data[
-                                "normalized_current"
-                            ].to_numpy(),
-
-                            operating_voltage=operating_voltage
-                            if "operating_voltage" in locals()
-                            else 2000.0,
-
-                            candidates=candidates,
-
-                            particle_count=particle_count,
-                        )
-
-                    st.subheader(
-                        "Best-fit emission characteristics"
-                    )
-
-                    best = result.iloc[0]
-
-                    c1, c2, c3 = st.columns(3)
-
-                    c1.metric(
-                        "Monomer",
-                        f"{best['monomer_fraction']*100:.1f}%",
-                    )
-
-                    c2.metric(
-                        "Dimer",
-                        f"{best['dimer_fraction']*100:.1f}%",
-                    )
-
-                    c3.metric(
-                        "Trimer",
-                        f"{best['trimer_fraction']*100:.1f}%",
-                    )
-
-                    st.metric(
-                        "Fit error",
-                        f"{best['error']:.5g}",
-                    )
-
-                    st.subheader(
-                        "Candidate solutions"
-                    )
-
-                    st.dataframe(
-                        result.head(20),
-                        use_container_width=True,
-                    )
-
+                st.success(
+                    "RPA dataset loaded successfully."
+                )
 
 # ============================================================
-# DOCUMENTATION
+# FOOTER
 # ============================================================
 
-with tab_about:
+st.divider()
 
-    st.header("Scientific scope")
-
-    st.markdown(
-        """
-### Implemented
-
-**Taylor-cone onset**
-
-The original FALAK onset equation is retained.
-
-**Cluster species**
-
-The RPA model represents emitted charged species as
-monomers, dimers and trimers.
-
-**Fragmentation**
-
-The model uses the published stopping-potential relationships
-for fragmented clusters.
-
-**RPA**
-
-The model converts simulated stopping potentials into an
-RPA-like normalized current curve.
-
-**Inference**
-
-Experimental RPA data can be compared against candidate
-beam-composition models.
-
-### Not implemented
-
-This project does **not** claim to perform molecular dynamics.
-
-It also does not claim to solve the complete
-electrohydrodynamic field around an emitter.
-
-Those are separate research modules that would require:
-
-- an actual molecular-dynamics engine,
-- a validated ionic-liquid force field,
-- experimentally/MD-derived fragmentation data,
-- and a validated electrohydrodynamic field solution.
-
-Therefore the scientifically accurate description is:
-
-> **Reduced-order electrospray emission and RPA model
-> informed by published molecular-dynamics results.**
-        """
-    )
-
-    st.info(
-        "For research use, every empirical parameter should be "
-        "linked to its source in the repository documentation."
-    )
+st.caption(
+    "FALAK Electrospray Model — research prototype. "
+    "Simulation results are only reported when generated "
+    "from documented computational or experimental data."
+)
