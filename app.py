@@ -4,10 +4,10 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator, AutoMinorLocator
 
-st.set_page_config(page_title="FALAK Electrospray Lab", page_icon="🛰️", layout="centered")
+st.set_page_config(page_title="FALAK Electrospray Model", layout="centered")
 
-st.markdown("<h1 style='text-align:center; letter-spacing:2px;'>🛰️ FALAK — ELECTROSPRAY PROPULSION LAB</h1>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center; color:#7fa8c9; font-size:14px;'>PRE-HARDWARE TAYLOR CONE ONSET MODEL &nbsp;|&nbsp; IONIC LIQUID PROPELLANT SCREENING</p>", unsafe_allow_html=True)
+st.markdown("<h1 style='text-align:center; letter-spacing:1px;'>FALAK Electrospray Onset Model</h1>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center; color:#7fa8c9; font-size:14px;'>Pre-hardware Taylor cone onset prediction and propellant screening</p>", unsafe_allow_html=True)
 st.markdown("---")
 
 eps0 = 8.854e-12
@@ -29,7 +29,7 @@ SPACE_BG = "#0a0e1a"
 
 col1, col2 = st.columns(2)
 with col1:
-    rc_um = st.slider("Emitter tip radius (µm)", 2, 30, 10)
+    rc_um = st.slider("Emitter tip radius (micrometers)", 2, 30, 10)
 with col2:
     d_mm = st.slider("Electrode gap (mm)", 0.5, 5.0, 2.0)
 
@@ -40,8 +40,7 @@ names = list(propellants.keys())
 volts = [onset_voltage(propellants[n]['gamma'], rc, d) / 1000 for n in names]
 colors = [propellants[n]['color'] for n in names]
 
-# --- Bar chart ---
-st.subheader("⚡ Predicted onset voltage by propellant")
+st.subheader("Predicted onset voltage by propellant")
 fig, ax = plt.subplots(facecolor=SPACE_BG)
 ax.set_facecolor(SPACE_BG)
 ax.bar(names, volts, color=colors, edgecolor="white", linewidth=0.6)
@@ -56,18 +55,16 @@ for spine in ax.spines.values():
     spine.set_color("#2a3550")
 st.pyplot(fig)
 
-# --- Data table ---
-st.subheader("📊 Model inputs and predictions")
+st.subheader("Model inputs and predictions")
 table_data = {
     "Propellant": names,
-    "γ (N/m)": [propellants[n]['gamma'] for n in names],
-    "K (S/m)": [propellants[n]['K'] for n in names],
-    "Predicted onset V (kV)": [round(v, 3) for v in volts]
+    "Surface tension (N/m)": [propellants[n]['gamma'] for n in names],
+    "Conductivity (S/m)": [propellants[n]['K'] for n in names],
+    "Predicted onset voltage (kV)": [round(v, 3) for v in volts]
 }
 st.dataframe(pd.DataFrame(table_data), use_container_width=True)
 
-# --- Log-log sensitivity plot ---
-st.subheader("📈 Onset voltage vs. tip radius (log-log)")
+st.subheader("Onset voltage vs tip radius (log-log)")
 radii_um = np.logspace(np.log10(2), np.log10(30), 300)
 
 fig2, ax2 = plt.subplots(facecolor=SPACE_BG)
@@ -76,7 +73,7 @@ for name in names:
     props = propellants[name]
     v_sweep = [onset_voltage(props['gamma'], r * 1e-6, d) / 1000 for r in radii_um]
     ax2.loglog(radii_um, v_sweep, label=name, color=props['color'], linewidth=2.2)
-ax2.set_xlabel("Tip radius (µm)")
+ax2.set_xlabel("Tip radius (micrometers)")
 ax2.set_ylabel("Onset voltage (kV)")
 ax2.legend(facecolor=SPACE_BG, edgecolor="#2a3550", labelcolor="white")
 ax2.grid(True, which="major", linestyle="--", alpha=0.3, color="#4fd1ff")
@@ -85,13 +82,24 @@ for spine in ax2.spines.values():
     spine.set_color("#2a3550")
 st.pyplot(fig2)
 
-# --- Sources ---
 st.markdown("---")
-st.caption(
-    "Propellant properties (γ, K): Garoz et al., "
-    "\"Taylor cones of ionic liquids from capillary tubes as sources of pure ions,\" "
-    "J. Appl. Phys. 102, 064913 (2007), Table I. "
-    "Onset voltage model: Taylor cone equilibrium (G.I. Taylor, Proc. Roy. Soc. A 280, 383–97, 1964) "
-    "combined with capillary-electrode field approximation."
-)
-st.caption("FALAK — Aerospace & Engineering Program")
+st.subheader("Model validation against published data")
+st.write("Enter a measured onset voltage from a literature source to check how well the model predicts real experimental results.")
+
+val_col1, val_col2 = st.columns(2)
+with val_col1:
+    validation_liquid = st.selectbox("Propellant to validate", names)
+with val_col2:
+    published_v = st.number_input("Published onset voltage (kV)", min_value=0.0, value=0.0, step=0.1)
+
+predicted_v = volts[names.index(validation_liquid)]
+
+if published_v > 0:
+    error_pct = abs(predicted_v - published_v) / published_v * 100
+    st.metric(
+        label=f"{validation_liquid}: predicted vs published",
+        value=f"{predicted_v:.2f} kV",
+        delta=f"{error_pct:.1f}% from published {published_v:.2f} kV"
+    )
+    if error_pct < 15:
+        st.success("Prediction within 15% of published value. Model
