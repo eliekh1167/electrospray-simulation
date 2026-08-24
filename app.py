@@ -102,4 +102,8 @@ if published_v > 0:
         delta=f"{error_pct:.1f}% from published {published_v:.2f} kV"
     )
     if error_pct < 15:
-        st.success("Prediction within 15% of published value. Model
+        st.success("Prediction within 15 percent of published value. Model treated as validated for this regime.")
+    else:
+        st.warning("Prediction differs from published value by more than 15 percent. Geometry assumptions or property values may need review before treating this as validated.")
+else:
+    st.info("Enter a published onset voltage above to run the validation check.")
