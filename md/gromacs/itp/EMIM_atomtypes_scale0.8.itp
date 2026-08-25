@@ -1,0 +1,19 @@
+; 1-ethyl-3-methylimidazolium cation [EMIM]
+; Ionic liquid OPLS-AA force field, Version 3/2017, Orlando Acevedo
+; B. Doherty, X. Zhong, S. Gathiaka, B. Li, O. Acevedo,
+; Revisiting OPLS Force Field Parameters for Ionic Liquid Simulations,
+; J. Chem. Theory Comput., 2017, 13, 6131-6145.
+
+[ atomtypes ]
+;  type    mass     charge  ptype sigma(nm) epsilon(kJ/mol)
+CR    12.011    -0.072    A    0.355    0.292880
+NA    14.007    0.176     A    0.325    0.711280
+CW    12.011    -0.192    A    0.355    0.292880
+HR    1.008     0.168     A    0.242    0.125520
+HW    1.008     0.216     A    0.242    0.125520
+CM    12.011    -0.280    A    0.350    0.276144
+HM    1.008     0.144     A    0.250    0.125520
+CA    12.011    -0.136    A    0.350    0.276144
+HA    1.008     0.144     A    0.250    0.125520
+CT    12.011    -0.192    A    0.350    0.276144
+HT    1.008     0.064     A    0.250    0.125520
