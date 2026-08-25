@@ -1,0 +1,10 @@
+; Tetrafluoroborate anion [BF4]
+; Ionic liquid OPLS-AA force field, Version 3/2017, Orlando Acevedo
+; B. Doherty, X. Zhong, S. Gathiaka, B. Li, O. Acevedo,
+; Revisiting OPLS Force Field Parameters for Ionic Liquid Simulations,
+; J. Chem. Theory Comput., 2017, 13, 6131-6145.
+
+[ atomtypes ]
+; type    mass     charge  ptype  sigma(nm)  epsilon(kJ/mol)
+B    10.811     0.6620    A    0.35814    0.39748
+F    18.998    -0.3655    A    0.31181    0.25104
