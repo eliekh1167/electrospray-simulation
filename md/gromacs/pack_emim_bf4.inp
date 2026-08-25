@@ -1,0 +1,13 @@
+tolerance 2.0
+filetype pdb
+output emim_bf4_box.pdb
+
+structure clean_EMIM.pdb
+  number 500
+  inside cube 0. 0. 0. 50.45
+end structure
+
+structure clean_BF4.pdb
+  number 500
+  inside cube 0. 0. 0. 50.45
+end structure
