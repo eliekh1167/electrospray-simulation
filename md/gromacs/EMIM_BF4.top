@@ -1,0 +1,26 @@
+; EMIM-BF4 topology file
+; Bonded and nonbonded parameters from:
+; B. Doherty, X. Zhong, S. Gathiaka, B. Li, O. Acevedo,
+; Revisiting OPLS Force Field Parameters for Ionic Liquid Simulations,
+; J. Chem. Theory Comput., 2017, 13, 6131-6145.
+; Source repository: github.com/orlandoacevedo/IL
+
+#define _FF_OPLS
+#define _FF_OPLSAA
+
+[ defaults ]
+;nbfunc  comb-rule  gen-pairs  fudgeLJ  fudgeQQ
+1        3          yes        0.5      0.5
+
+#include "itp/EMIM_atomtypes_scale0.8.itp"
+#include "itp/BF4_atomtypes_scale0.8.itp"
+#include "itp/EMIM_scale0.8.itp"
+#include "itp/BF4_scale0.8.itp"
+
+[ system ]
+; name
+Neat EMI BF4
+
+[ molecules ]
+EMI  500
+BF4  500
