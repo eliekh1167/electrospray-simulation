@@ -2,5 +2,5 @@ streamlit
 numpy
 pandas
 matplotlib
-plotly
-scipy
+stmol
+py3Dmol
