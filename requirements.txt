@@ -2,5 +2,7 @@ streamlit
 numpy
 pandas
 matplotlib
-stmol
 py3Dmol
+stmol
+ipywidgets
+ipython_genutils
